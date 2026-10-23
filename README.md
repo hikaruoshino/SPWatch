@@ -25,6 +25,7 @@ FFXI の利用規約はサードパーティ製ツールを禁止しており、
 - 敵が技を準備しているのを見つけたときは「準備中」と出て、発動すると秒数に変わります。
 - 敵が倒れたとき、ゾーンを移動したときは消えます。
 - 味方・フェイスの技は対象外です。
+- 表示する敵は選べます (`//spw scope`)。既定は「全て」で、自分が戦っていない敵 (パーティやアライアンスの人が戦っている敵) の SP も出ます。「自分とパーティ」にすると、自分かパーティが戦っている敵だけ、「自分」にすると、自分を狙っている敵 (自分が先に攻撃した敵) だけになります。敵が狙っている相手と、最初に攻撃した人を見て決めています (v0.2.0 で追加。ゲーム内未確認)。
 
 効果時間は、LandSandBoat (私設サーバー) の技のデータをもとにしています。ソウルボイスだけは、LandSandBoat では 180 秒ですが、NM テレスとの戦闘の実感に合わせて 60 秒にしました。**本家の値は確認できていません。敵ごとに違う可能性があるので、目安として使ってください。**
 
@@ -43,6 +44,7 @@ FFXI の利用規約はサードパーティ製ツールを禁止しており、
 | :--- | :--- |
 | `//spw on` / `//spw off` | 表示 / 非表示 |
 | `//spw lang auto\|ja\|en` | 表示の言語。auto はクライアントの言語に合わせる |
+| `//spw scope all\|party\|self` | 表示する敵: 全て (既定) / 自分とパーティが戦っている敵 / 自分が戦っている敵 |
 | `//spw sec <n>` | 時間を数えない技を表示する秒数 (既定 10) |
 | `//spw pos <x> <y>` | 位置 |
 | `//spw size <n>` | 文字の大きさ |
@@ -80,6 +82,7 @@ The FFXI Terms of Service prohibit third-party tools, and Windower may fall unde
 - When an enemy is seen readying an ability it shows "readying", then switches to the countdown when the ability is used.
 - It clears when the enemy dies or you change zones.
 - Abilities of party members and trusts are ignored.
+- You can choose which enemies are shown with `//spw scope`. The default is "all", which also shows the SP abilities of enemies that other party or alliance members are fighting. "party" shows only enemies fighting you or your party, and "self" shows only enemies fighting you. It decides by who the enemy is targeting and who claimed it (added in v0.2.0; not tested in game yet).
 
 The durations come from LandSandBoat's (a private server) ability data. Only Soul Voice differs: it is 180 s in LandSandBoat, but I set it to 60 s to match what I saw. **I have not confirmed the retail values, and they may differ per enemy, so treat them as a guide.**
 
@@ -98,6 +101,7 @@ The durations come from LandSandBoat's (a private server) ability data. Only Sou
 | :--- | :--- |
 | `//spw on` / `//spw off` | show / hide |
 | `//spw lang auto\|ja\|en` | display language. auto follows the client |
+| `//spw scope all\|party\|self` | which enemies to show: all (default) / enemies fighting you and your party / enemies fighting you |
 | `//spw sec <n>` | seconds an ability without countdown stays (default 10) |
 | `//spw pos <x> <y>` | position |
 | `//spw size <n>` | text size |

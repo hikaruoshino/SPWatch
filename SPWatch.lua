@@ -1,5 +1,5 @@
 -- =============================================================================
--- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.1.0)
+-- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.2.0)
 -- =============================================================================
 -- 目的 / Purpose:
 --   敵が2時間アビリティを使ったら、小さな表示で知らせます。効果時間が分かっているものは残り秒数を数えます。
@@ -22,7 +22,7 @@
 
 _addon.name     = "SPWatch"
 _addon.author   = "hikaruoshino"
-_addon.version  = "0.1.0"
+_addon.version  = "0.2.0"
 _addon.commands = {"spwatch", "spw"}
 
 local config  = require("config")
@@ -37,6 +37,7 @@ defaults.show = true          -- 表示する / show the HUD
 defaults.lang = "auto"        -- auto (クライアントの言語) / ja / en
 defaults.alert_sec = 10       -- 効果時間を数えない技を表示する秒数 / seconds an alert without countdown stays
 defaults.sound = false        -- 将来用 (今は何もしない) / reserved
+defaults.scope = "all"        -- どの敵を表示するか / which enemies: all (全ての敵) / party (自分とパーティが戦っている敵) / self (自分が戦っている敵)
 defaults.pos = {x = 40, y = 260}
 defaults.text = {font = "Meiryo", size = 12, alpha = 255}
 defaults.bg = {alpha = 180, red = 10, green = 10, blue = 15}
@@ -122,12 +123,45 @@ local function is_enemy(actor)
     return actor and actor.spawn_type == 16 and not actor.in_party
 end
 
+-- 表示する敵の範囲 (scope)。all は全て。self / party は、その敵が「自分 (とパーティ) を狙っている」か「自分 (とパーティ) が先に攻撃した」ものだけ
+local PARTY_KEYS = {"p0", "p1", "p2", "p3", "p4", "p5"}
+
+local function scope_ids()
+    local ids = {}
+    local me = windower.ffxi.get_player()
+    if me and me.id then ids[me.id] = true end
+    if settings.scope == "party" then
+        local party = windower.ffxi.get_party()
+        if party then
+            for _, key in ipairs(PARTY_KEYS) do
+                local m = party[key]
+                local mob = m and m.mob
+                if mob and mob.id then ids[mob.id] = true end
+            end
+        end
+    end
+    return ids
+end
+
+local function in_scope(actor)
+    local scope = settings.scope
+    if scope ~= "self" and scope ~= "party" then return true end
+    local ids = scope_ids()
+    if actor.claim_id and ids[actor.claim_id] then return true end
+    local ti = tonumber(actor.target_index) or 0
+    if ti > 0 then
+        local tm = windower.ffxi.get_mob_by_index(ti)
+        if tm and tm.id and ids[tm.id] then return true end
+    end
+    return false
+end
+
 -- 技を使われた (準備開始 or 発動)。発動のときだけ効果時間を数え始める
 local function register(actor_id, id, used, now)
     local key = ABILITY_KEY[id]
     if not key then return end
     local actor = windower.ffxi.get_mob_by_id(actor_id)
-    if not is_enemy(actor) then return end
+    if not is_enemy(actor) or not in_scope(actor) then return end
     local rkey = tostring(actor_id) .. ":" .. key
     local dur = DURATION[key]
     local row = rows[rkey]
@@ -287,6 +321,7 @@ end)
 local function print_help()
     chat("[SPWatch] //spw on|off          : " .. L("表示 / 非表示", "show / hide the HUD"))
     chat("[SPWatch] //spw lang auto|ja|en : " .. L("表示の言語", "display language"))
+    chat("[SPWatch] //spw scope all|party|self : " .. L("表示する敵: 全て / 自分とパーティが戦っている敵 / 自分が戦っている敵", "which enemies: all / enemies fighting you and your party / enemies fighting you"))
     chat("[SPWatch] //spw sec <n>         : " .. L("時間を数えない技を表示する秒数 (既定 10)", "seconds an alert without countdown stays (default 10)"))
     chat("[SPWatch] //spw pos <x> <y>     : " .. L("位置 (マウスのドラッグでも動かせます)", "position (you can also drag it with the mouse)"))
     chat("[SPWatch] //spw size <n>        : " .. L("文字の大きさ (HUD の上でホイールでも変えられます)", "text size (or use the wheel over the HUD)"))
@@ -319,6 +354,15 @@ windower.register_event("addon command", function(cmd, ...)
             else
                 chat("[SPWatch] //spw lang auto|ja|en")
             end
+        elseif cmd == "scope" then
+            local a = tostring(args[1] or ""):lower()
+            if a == "all" or a == "party" or a == "self" then
+                settings.scope = a
+                config.save(settings)
+                chat("[SPWatch] scope: " .. a .. " (" .. (a == "all" and L("全ての敵", "all enemies") or a == "party" and L("自分とパーティが戦っている敵", "enemies fighting you and your party") or L("自分が戦っている敵", "enemies fighting you")) .. ")")
+            else
+                chat("[SPWatch] //spw scope all|party|self")
+            end
         elseif cmd == "sec" and tonumber(args[1]) then
             settings.alert_sec = math.max(1, math.min(60, math.floor(tonumber(args[1]))))
             config.save(settings)
@@ -336,8 +380,8 @@ windower.register_event("addon command", function(cmd, ...)
             sample_row("Teles", "Benediction", 689, 10, now)
             test_until = now + 10
         elseif cmd == "status" then
-            chat(string.format("[SPWatch] v%s show=%s lang=%s(%s) alert_sec=%d size=%d", _addon.version, tostring(settings.show),
-                tostring(settings.lang), LANG, num(settings.alert_sec, 10), num(settings.text and settings.text.size, 12)))
+            chat(string.format("[SPWatch] v%s show=%s lang=%s(%s) scope=%s alert_sec=%d size=%d", _addon.version, tostring(settings.show),
+                tostring(settings.lang), LANG, tostring(settings.scope), num(settings.alert_sec, 10), num(settings.text and settings.text.size, 12)))
         else
             print_help()
         end
