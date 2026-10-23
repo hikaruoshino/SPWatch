@@ -332,8 +332,8 @@ windower.register_event("addon command", function(cmd, ...)
             config.save(settings)
         elseif cmd == "test" then
             local now = os.clock()
-            sample_row("Telus", "Soul Voice", 696, 60, now)
-            sample_row("Telus", "Benediction", 689, 10, now)
+            sample_row("Teles", "Soul Voice", 696, 60, now)
+            sample_row("Teles", "Benediction", 689, 10, now)
             test_until = now + 10
         elseif cmd == "status" then
             chat(string.format("[SPWatch] v%s show=%s lang=%s(%s) alert_sec=%d size=%d", _addon.version, tostring(settings.show),
