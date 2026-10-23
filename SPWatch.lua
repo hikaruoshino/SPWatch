@@ -12,12 +12,12 @@
 --     It watches the action event (action packet 0x028): category 7 (readying) and category 11 (monster ability used).
 --   - 技の名前は Windower の res/monster_abilities.lua から (日本語・英語どちらも)。
 --     Ability names come from res/monster_abilities.lua (Japanese and English).
---   - 効果時間 (DURATION) は、LandSandBoat のデータと BG-Wiki、NM テレスとの戦闘での実感によるもので、
+--   - 効果時間 (DURATION) は、LandSandBoat のデータ (ソウルボイスだけ NM テレスとの戦闘の実感) によるもので、
 --     敵ごとに違う可能性があります。目安として使ってください。
---     Durations come from LandSandBoat data, BG-Wiki and play experience; they may differ per enemy. Treat them as a guide.
---   - 時間が分からないもの (女神の祝福・明鏡止水など瞬時のもの) は、時間を数えず、数秒だけ表示します。
+--     Durations come from LandSandBoat data (Soul Voice from play experience); they may differ per enemy. Treat them as a guide.
+--   - 時間を数えないもの (女神の祝福・微塵がくれ・アストラルフロウは瞬時、明鏡止水はウェポンスキルを数回使うと終わる) は、「発動!」だけを数秒 (既定 10 秒) 表示します。
 --     Instant ones (Benediction, Meikyo Shisui, ...) are shown for a few seconds without a countdown.
---   - ゲーム内未確認 (v0.1.0) / Not verified in game yet (v0.1.0).
+--   - 日本語クライアントでゲーム内確認済み (ディスメンバーブリゲード・天誅六人衆)。英語表示は英語クライアントで未確認 / Checked in game on the Japanese client; the English display is not tested on an English client.
 -- =============================================================================
 
 _addon.name     = "SPWatch"
