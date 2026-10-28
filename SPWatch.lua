@@ -1,5 +1,5 @@
 -- =============================================================================
--- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.2.0)
+-- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.2.1)
 -- =============================================================================
 -- 目的 / Purpose:
 --   敵が2時間アビリティを使ったら、小さな表示で知らせます。効果時間が分かっているものは残り秒数を数えます。
@@ -22,7 +22,7 @@
 
 _addon.name     = "SPWatch"
 _addon.author   = "hikaruoshino"
-_addon.version  = "0.2.0"
+_addon.version  = "0.2.1"
 _addon.commands = {"spwatch", "spw"}
 
 local config  = require("config")
@@ -97,6 +97,24 @@ local DURATION = {
 
 -- 日本語名の補い (res に無い場合のみ使う) は不要: res/monster_abilities.lua の ja / en をそのまま使う。
 
+-- 上の表にない ID でも、res の英名が同じ SP の技名なら同じ技として扱う (res/monster_abilities.lua には、別の敵・別の版の同名の技の ID が
+-- まだある)。最初に使われたときに 1 回だけ調べて覚える。SP でなければ false を覚え、次からは表を引くだけ
+-- IDs not in the table above still count when their res English name is one of these SP names (res has more same-name IDs for other enemies).
+local SP_NAMES = {}
+for _, name in pairs(ABILITY_KEY) do SP_NAMES[name] = true end
+local key_cache = {}   -- 技 ID -> 種類 (SP でなければ false)
+
+local function ability_key(id)
+    local key = ABILITY_KEY[id]
+    if key then return key end
+    local cached = key_cache[id]
+    if cached ~= nil then return cached or nil end
+    local def = res.monster_abilities and res.monster_abilities[id]
+    key = def and def.en and SP_NAMES[def.en] and def.en or nil
+    key_cache[id] = key or false
+    return key
+end
+
 local CAST_BEGIN = 24931   -- category 7 の param (技の準備開始) / readying started
 local MAX_ROWS = 6
 
@@ -158,7 +176,7 @@ end
 
 -- 技を使われた (準備開始 or 発動)。発動のときだけ効果時間を数え始める
 local function register(actor_id, id, used, now)
-    local key = ABILITY_KEY[id]
+    local key = ability_key(id)
     if not key then return end
     local actor = windower.ffxi.get_mob_by_id(actor_id)
     if not is_enemy(actor) or not in_scope(actor) then return end
