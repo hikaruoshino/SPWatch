@@ -1,5 +1,5 @@
 -- =============================================================================
--- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.2.1)
+-- SPWatch.lua : 敵の2時間アビリティ (SP) の警告 / Enemy 2-hour ability alert (Windower 4, v0.2.2)
 -- =============================================================================
 -- 目的 / Purpose:
 --   敵が2時間アビリティを使ったら、小さな表示で知らせます。効果時間が分かっているものは残り秒数を数えます。
@@ -22,7 +22,7 @@
 
 _addon.name     = "SPWatch"
 _addon.author   = "hikaruoshino"
-_addon.version  = "0.2.1"
+_addon.version  = "0.2.2"
 _addon.commands = {"spwatch", "spw"}
 
 local config  = require("config")
@@ -115,13 +115,15 @@ local function ability_key(id)
     return key
 end
 
-local CAST_BEGIN = 24931   -- category 7 の param (技の準備開始) / readying started
+local CAST_BEGIN = 24931       -- category 7 の param (技の準備開始) / readying started
+local CAST_INTERRUPT = 28787   -- category 7 の param (技の中断。libs/actions.lua・SwapLog と同じ値) / readying interrupted
 local MAX_ROWS = 6
+local MAX_STORED = 30          -- 覚えておく行の上限 (HUD を隠している間も増えすぎないように) / cap on stored rows
 
 -- -----------------------------------------------------------------------------
 -- 状態 / State
 -- -----------------------------------------------------------------------------
-local rows = {}   -- key = actor_id .. ":" .. 技名 / value = {actor, ability, until_time, timed, start}
+local rows = {}   -- key = actor_id .. ":" .. 技名 / value = {actor, actor_id, id (技 ID), key, until_time, timed, start, readying}
 
 local function num(v, default)
     if type(v) == "number" then return v end
@@ -174,22 +176,43 @@ local function in_scope(actor)
     return false
 end
 
+-- 行の数が上限に達していたら、いちばん古い行を消す (新しい行を足す前に呼ぶ)
+local function make_room()
+    local count, oldest_key, oldest_start = 0, nil, nil
+    for k, row in pairs(rows) do
+        count = count + 1
+        if not oldest_start or row.start < oldest_start then oldest_key, oldest_start = k, row.start end
+    end
+    if count >= MAX_STORED and oldest_key then rows[oldest_key] = nil end
+end
+
 -- 技を使われた (準備開始 or 発動)。発動のときだけ効果時間を数え始める
 local function register(actor_id, id, used, now)
     local key = ability_key(id)
     if not key then return end
+    local rkey = tostring(actor_id) .. ":" .. key
+    local row = rows[rkey]
+    -- 発動したら、先に「準備中」を片付ける (敵が範囲外になっていても古い「準備中」を残さない)
+    if used and row and row.readying then rows[rkey] = nil; row = nil end
     local actor = windower.ffxi.get_mob_by_id(actor_id)
     if not is_enemy(actor) or not in_scope(actor) then return end
-    local rkey = tostring(actor_id) .. ":" .. key
     local dur = DURATION[key]
-    local row = rows[rkey]
     if dur and used then
-        rows[rkey] = {actor = actor.name or "?", actor_id = actor_id, label = ability_label(id, key), key = key,
+        if not row then make_room() end
+        rows[rkey] = {actor = actor.name or "?", actor_id = actor_id, id = id, key = key,
             until_time = now + dur, timed = true, start = now}
     elseif not row or not row.timed or now >= row.until_time then
         -- 準備開始 (まだ効果時間は数えない) / 時間の無い技
-        rows[rkey] = {actor = actor.name or "?", actor_id = actor_id, label = ability_label(id, key), key = key,
+        if not row then make_room() end
+        rows[rkey] = {actor = actor.name or "?", actor_id = actor_id, id = id, key = key,
             until_time = now + num(settings.alert_sec, 10), timed = false, start = now, readying = (not used)}
+    end
+end
+
+-- 技の準備が中断された: その敵の「準備中」だけを消す (発動済みの効果時間は残す)
+local function interrupt(actor_id)
+    for k, row in pairs(rows) do
+        if row.readying and row.actor_id == actor_id then rows[k] = nil end
     end
 end
 
@@ -204,6 +227,8 @@ local function on_action(act)
         local target = act.targets and act.targets[1]
         local action = target and target.actions and target.actions[1]
         if action then register(act.actor_id, num(action.param, 0), false, now) end
+    elseif cat == 7 and num(act.param, 0) == CAST_INTERRUPT then
+        interrupt(act.actor_id)
     elseif cat == 6 and num(act.param, 0) == 30 then
         -- アビリティ (category 6) の「アストラルフロウ」が届く場合もある / Astral Flow can also arrive as a job ability
         register(act.actor_id, 734, true, now)
@@ -225,17 +250,29 @@ local function color(str, r, g, b)
     return string.format("\\cs(%d,%d,%d)%s\\cr", r, g, b, str)
 end
 
-local function remove_dead(now)
+-- 期限切れ・倒れた・いなくなった敵の行を消す。表示の有無に関係なく毎回行う。期限切れは敵を引く前に消す
+local function prune(now)
     for k, row in pairs(rows) do
-        local m = windower.ffxi.get_mob_by_id(row.actor_id)
-        if now >= row.until_time + (row.timed and GRACE_SEC or 0) or (m and m.hpp and m.hpp <= 0) or (not m and not row.test) then
+        if now >= row.until_time + (row.timed and GRACE_SEC or 0) then
             rows[k] = nil
+        elseif not row.test then
+            local m = windower.ffxi.get_mob_by_id(row.actor_id)
+            if not m or (m.hpp and m.hpp <= 0) then rows[k] = nil end
+        end
+    end
+end
+
+-- scope を変えたとき、今の行を新しい範囲で見直す
+local function recheck_scope()
+    for k, row in pairs(rows) do
+        if not row.test then
+            local m = windower.ffxi.get_mob_by_id(row.actor_id)
+            if not is_enemy(m) or not in_scope(m) then rows[k] = nil end
         end
     end
 end
 
 local function build(now)
-    remove_dead(now)
     local list = {}
     for _, row in pairs(rows) do list[#list + 1] = row end
     table.sort(list, function(a, b) return a.start > b.start end)
@@ -244,19 +281,21 @@ local function build(now)
     for i = 1, math.min(#list, MAX_ROWS) do
         local r = list[i]
         local line
+        -- 技名は描画のたびに今の言語で引く (言語を切り替えた前の行も新しい言語になる)
+        local label = color(ability_label(r.id, r.key), 255, 255, 255)
         if r.timed then
             local left = r.until_time - now
             if left > 0 then
                 local c = left <= 10 and {255, 90, 90} or {255, 200, 90}
-                line = string.format("%s %s %s", r.actor, color(r.label, 255, 255, 255), color(string.format("%2d%s", math.ceil(left), L("秒", "s")), c[1], c[2], c[3]))
+                line = string.format("%s %s %s", r.actor, label, color(string.format("%2d%s", math.ceil(left), L("秒", "s")), c[1], c[2], c[3]))
             else
                 -- 数え終わったあと、実際の効果が切れるまでの数秒
-                line = string.format("%s %s %s", r.actor, color(r.label, 255, 255, 255), color(L(" 0秒 (まもなく切れる)", " 0s (ending soon)"), 255, 90, 90))
+                line = string.format("%s %s %s", r.actor, label, color(L(" 0秒 (まもなく切れる)", " 0s (ending soon)"), 255, 90, 90))
             end
         elseif r.readying then
-            line = string.format("%s %s %s", r.actor, color(r.label, 255, 255, 255), color(L("準備中", "readying"), 200, 200, 200))
+            line = string.format("%s %s %s", r.actor, label, color(L("準備中", "readying"), 200, 200, 200))
         else
-            line = string.format("%s %s %s", r.actor, color(r.label, 255, 255, 255), color(L("発動!", "used!"), 255, 120, 120))
+            line = string.format("%s %s %s", r.actor, label, color(L("発動!", "used!"), 255, 120, 120))
         end
         lines[#lines + 1] = line
     end
@@ -286,7 +325,9 @@ windower.register_event("prerender", function()
     local now = os.clock()
     if now < next_refresh then return end
     next_refresh = now + REFRESH_SEC
-    local ok, err = pcall(refresh, now)
+    -- 掃除は表示の有無に関係なく行う (HUD を隠している間も行が溜まらない)
+    local ok, err = pcall(prune, now)
+    if ok then ok, err = pcall(refresh, now) end
     if not ok then
         next_refresh = now + 5
         chat("[SPWatch] " .. L("表示エラー: ", "display error: ") .. tostring(err):match("^[^\n]*"), 123)
@@ -301,9 +342,11 @@ end)
 windower.register_event("zone change", hide_all)
 windower.register_event("logout", hide_all)
 
+-- 破棄を先に行い、保存の失敗に左右されないようにする
 windower.register_event("unload", function()
-    config.save(settings)
-    if hud then hud:destroy() end
+    rows = {}
+    if hud then pcall(hud.destroy, hud) end
+    pcall(config.save, settings)
 end)
 
 -- -----------------------------------------------------------------------------
@@ -327,7 +370,8 @@ windower.register_event("mouse", function(mtype, x, y, delta, blocked)
         if not hud:visible() or not hud:hover(x, y) then return nil end
         local step = num(delta, 0) > 0 and 1 or -1
         set_size(num(hud:size(), num(settings.text and settings.text.size, 12)) + step)
-        config.save(settings)
+        -- 保存に失敗しても、ホイールは HUD で受け取ったものとして扱う (ゲームに伝えない)
+        pcall(config.save, settings)
         return true
     end)
     if ok then return result end
@@ -348,7 +392,7 @@ local function print_help()
 end
 
 local function sample_row(actor, key, id, dur, now)
-    rows["test:" .. key] = {actor = actor, actor_id = -1, test = true, label = ability_label(id, key), key = key,
+    rows["test:" .. key] = {actor = actor, actor_id = -1, test = true, id = id, key = key,
         until_time = now + dur, timed = dur > 20 and true or false, start = now}
 end
 
@@ -376,6 +420,8 @@ windower.register_event("addon command", function(cmd, ...)
             local a = tostring(args[1] or ""):lower()
             if a == "all" or a == "party" or a == "self" then
                 settings.scope = a
+                recheck_scope()
+                last_text = nil
                 config.save(settings)
                 chat("[SPWatch] scope: " .. a .. " (" .. (a == "all" and L("全ての敵", "all enemies") or a == "party" and L("自分とパーティが戦っている敵", "enemies fighting you and your party") or L("自分が戦っている敵", "enemies fighting you")) .. ")")
             else

@@ -22,10 +22,10 @@ FFXI の利用規約はサードパーティ製ツールを禁止しており、
 - 明鏡止水は、LandSandBoat のデータでは 30 秒ですが、ウェポンスキルを数回使うと終わるので、時間は数えず「発動!」だけにしています。女神の祝福・微塵がくれは瞬時、アストラルフロウは直後のペイクトが瞬時に発動するので、同じ扱いです。
 - 残り 10 秒以下は赤になります。
 - 秒数が 0 になっても、3 秒間は赤字で「0秒 (まもなく切れる)」を出してから消えます。インビンシブルで実測したところ、実際の効果は表示より約 3 秒長かったためです (確かめたのはこの 1 件だけです)。
-- 敵が技を準備しているのを見つけたときは「準備中」と出て、発動すると秒数に変わります。
+- 敵が技を準備しているのを見つけたときは「準備中」と出て、発動すると秒数に変わります。技の準備が中断されると、「準備中」は消えます (v0.2.2 で追加。ゲーム内未確認)。
 - 敵が倒れたとき、ゾーンを移動したときは消えます。
 - 味方・フェイスの技は対象外です。
-- 表示する敵は選べます (`//spw scope`)。既定は「全て」で、自分が戦っていない敵 (パーティやアライアンスの人が戦っている敵) の SP も出ます。「自分とパーティ」にすると、自分かパーティが戦っている敵だけ、「自分」にすると、自分を狙っている敵 (自分が先に攻撃した敵) だけになります。敵が狙っている相手と、最初に攻撃した人を見て決めています (v0.2.0 で追加。ゲーム内未確認)。
+- 表示する敵は選べます (`//spw scope`)。既定は「全て」で、自分が戦っていない敵 (パーティやアライアンスの人が戦っている敵) の SP も出ます。「自分とパーティ」にすると、自分かパーティが戦っている敵だけ、「自分」にすると、自分を狙っている敵 (自分が先に攻撃した敵) だけになります。敵が狙っている相手と、最初に攻撃した人を見て決めています (v0.2.0 で追加。ゲーム内未確認)。`scope` を変えると、出ている表示も新しい範囲で見直します。範囲から外れて消えた表示は、`all` に戻しても戻りません。その敵が次に技を使ったときから、また出ます (v0.2.2 で追加。ゲーム内未確認)。
 
 効果時間は、LandSandBoat (私設サーバー) の技のデータをもとにしています。ソウルボイスだけは、LandSandBoat では 180 秒ですが、NM テレスとの戦闘の実感に合わせて 60 秒にしました。**本家の値は確認できていません。敵ごとに違う可能性があるので、目安として使ってください。**
 
@@ -50,6 +50,10 @@ FFXI の利用規約はサードパーティ製ツールを禁止しており、
 | `//spw size <n>` | 文字の大きさ |
 | `//spw test` | 表示の試し |
 | `//spw status` | 今の設定 |
+
+## 更新履歴
+
+- **v0.2.2**: 技の準備が中断されたら「準備中」を消すようにしました。`//spw scope` を変えたとき、出ている表示も新しい範囲で見直します。`//spw lang` を切り替えたとき、出ている表示の技名も切り替わります。表示を隠している間も古い表示を片付け、覚える数は 30 件までにしました。アンロードのときは、表示の破棄を先に行います。マウスホイールで設定の保存に失敗しても、ホイールの入力は表示で受け取ります。どれもゲーム内では確認していません。
 
 ## ライセンス
 
@@ -79,10 +83,10 @@ The FFXI Terms of Service prohibit third-party tools, and Windower may fall unde
 - Meikyo Shisui is 30 s in LandSandBoat's data, but it ends after a few weapon skills, so it is shown as an alert without a countdown. Benediction and Mijin Gakure are instant, and Astral Flow is followed by instant blood pacts, so they are treated the same way.
 - The last 10 seconds turn red.
 - When the count reaches 0, it stays for 3 more seconds as a red "0s (ending soon)" and then disappears. I measured Invincible once and the real effect lasted about 3 seconds longer than the countdown (that is the only ability I checked).
-- When an enemy is seen readying an ability it shows "readying", then switches to the countdown when the ability is used.
+- When an enemy is seen readying an ability it shows "readying", then switches to the countdown when the ability is used. If the readying is interrupted, "readying" disappears (added in v0.2.2; not tested in game yet).
 - It clears when the enemy dies or you change zones.
 - Abilities of party members and trusts are ignored.
-- You can choose which enemies are shown with `//spw scope`. The default is "all", which also shows the SP abilities of enemies that other party or alliance members are fighting. "party" shows only enemies fighting you or your party, and "self" shows only enemies fighting you. It decides by who the enemy is targeting and who claimed it (added in v0.2.0; not tested in game yet).
+- You can choose which enemies are shown with `//spw scope`. The default is "all", which also shows the SP abilities of enemies that other party or alliance members are fighting. "party" shows only enemies fighting you or your party, and "self" shows only enemies fighting you. It decides by who the enemy is targeting and who claimed it (added in v0.2.0; not tested in game yet). When you change `scope`, the rows already on screen are checked against the new range. A row dropped by the new range does not come back when you return to `all`; it shows again the next time that enemy uses an ability (added in v0.2.2; not tested in game yet).
 
 The durations come from LandSandBoat's (a private server) ability data. Only Soul Voice differs: it is 180 s in LandSandBoat, but I set it to 60 s to match what I saw. **I have not confirmed the retail values, and they may differ per enemy, so treat them as a guide.**
 
@@ -107,6 +111,10 @@ The durations come from LandSandBoat's (a private server) ability data. Only Sou
 | `//spw size <n>` | text size |
 | `//spw test` | show a sample |
 | `//spw status` | current settings |
+
+### Changelog
+
+- **v0.2.2**: "readying" now disappears when the enemy's readying is interrupted. Changing `//spw scope` re-checks the rows already shown against the new range. Changing `//spw lang` switches the ability names of the rows already shown. Old rows are cleaned up even while the HUD is hidden, and at most 30 rows are kept. On unload the HUD is destroyed first. If saving the settings fails while you scroll the mouse wheel, the HUD still takes the wheel input. None of this has been tested in game yet.
 
 ### License
 
